@@ -1,0 +1,436 @@
+Objective
+Build a multi-page e-commerce product catalog using Next.js. You will learn to implement Server-Side Rendering (SSR) for dynamic content, create a backend using API Routes, and secure the application with NextAuth.js for user authentication. This project is vital for developing skills in building modern, performant, and secure full-stack web applications within the Next.js ecosystem.
+
+Description
+Background
+In modern web development, creating fast, SEO-friendly, and secure applications is crucial. Next.js provides powerful features to achieve this, blurring the lines between frontend and backend development. Server-Side Rendering (SSR), using functions like getServerSideProps, allows pages to be rendered on the server with fresh data for every request. This is ideal for dynamic content like product catalogs or user dashboards where data changes frequently.
+
+Next.js API Routes enable you to build a complete backend within your frontend project. This "backend-for-frontend" (BFF) pattern simplifies development by co-locating API logic with the UI that consumes it. You can handle database operations, business logic, and external API calls directly from your Next.js application.
+
+Authentication is a cornerstone of any e-commerce platform. NextAuth.js is a complete open-source authentication solution for Next.js applications. It simplifies implementing complex authentication flows, including OAuth with providers like Google and GitHub, session management, and route protection, allowing you to focus on your application's core features.
+
+Finally, ensuring application quality through testing is non-negotiable. By instrumenting the UI with data-testid attributes, you create a stable contract for end-to-end testing tools like Playwright or Cypress, making your application verifiable and robust.
+
+Implementation Details
+Follow these steps to build the application. Ensure every interactive UI element has a data-testid attribute as specified in the requirements.
+
+Step 1: Project Setup
+Initialize a new Next.js project using the Pages Router. Install necessary dependencies like Prisma (for database interaction), NextAuth.js, and Zod (for validation).
+
+# Initialize Next.js project
+npx create-next-app@latest --example with-tailwindcss my-ecommerce-app
+
+# Navigate into the project
+cd my-ecommerce-app
+
+# Install dependencies
+npm install next-auth @next-auth/prisma-adapter @prisma/client zod
+npm install prisma --save-dev
+
+# Initialize Prisma
+npx prisma init --datasource-provider postgresql
+Step 2: Containerization with Docker
+Create a docker-compose.yml file to manage your application and database services. This ensures a consistent development and evaluation environment. See requirement docker-compose-setup for the required structure.
+
+# docker-compose.yml template
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ecommerce
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./prisma/seed-data:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ecommerce"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/ecommerce
+      # Add other environment variables here
+    command: npm run dev
+Step 3: Database and Seeding
+Define your database schema in prisma/schema.prisma as per database-schema. Create a seed script to populate your database with sample products and users. This script should be automatically executed when the database container starts.
+
+// prisma/schema.prisma (excerpt)
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  price       Float
+  imageUrl    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+Step 4: Authentication with NextAuth.js
+Set up NextAuth.js by creating the dynamic API route pages/api/auth/[...nextauth].js. Configure at least one OAuth provider (e.g., GitHub or Google) and use the Prisma adapter to store user and session data in your database. See nextauth-setup for details.
+
+Step 5: Build SSR Pages
+Create the main product listing page (pages/index.js) and a dynamic product detail page (pages/products/[id].js). Use getServerSideProps in both pages to fetch data directly from your database on each request. Implement server-side search, filtering, and pagination on the product listing page by reading URL query parameters (?q=, ?page=).
+
+// Example of getServerSideProps in pages/index.js
+import prisma from '../../lib/prisma';
+
+export async function getServerSideProps(context) {
+  const { q, page = 1 } = context.query;
+  const productsPerPage = 12;
+
+  // Your logic to fetch products based on search query and page number
+  const products = await prisma.product.findMany({
+    // ...where clauses for search and pagination logic
+  });
+
+  return {
+    props: { products }, // will be passed to the page component as props
+  };
+}
+Step 6: Implement API Routes for Cart
+Create API routes under pages/api/cart/ to handle shopping cart functionality (add, view, remove items). These endpoints must be protected and should only be accessible to authenticated users. Use a validation library like Zod to ensure request payloads are correctly formatted (api-validation).
+
+Step 7: Protect Routes with Middleware
+Create a middleware.js file at the root of your project to protect routes like /cart. This middleware should check for a valid user session and redirect unauthenticated users to the login page.
+
+Step 8: Instrument UI for Testing
+Go through your entire application and add data-testid attributes to all key interactive and display elements as specified in data-testids-coverage. This is critical for automated evaluation.
+
+Submission Artifacts Checklist
+Ensure your submission includes the following:
+
+ README.md: A detailed guide to set up and run your project.
+ docker-compose.yml: Defines all application services.
+ Dockerfile: For building your Next.js application image.
+ .env.example: Documents all required environment variables.
+ submission.json: Contains test credentials as specified in submission-config.
+ /prisma: Contains your schema and seeding scripts.
+ /pages: All Next.js pages, including SSR pages and API routes.
+ /components: Your React components.
+ /middleware.js: Route protection logic.
+ All source code for the application.
+Implementation Guidelines
+These are suggestions to guide your implementation, not strict requirements.
+
+API Validation
+Always validate incoming data on your API routes. Libraries like Zod provide a declarative way to define schemas and validate request bodies, preventing invalid data from reaching your business logic or database. This is crucial for security and data integrity.
+
+State Management
+For client-side state that interacts with your API, like the shopping cart, consider using a data fetching library like SWR. It handles caching, revalidation, and loading/error states automatically, simplifying your UI logic.
+
+Error Handling
+Implement robust error handling on both the server (getServerSideProps, API routes) and the client. For API routes, return appropriate HTTP status codes and error messages. On the frontend, display user-friendly messages for network errors or failed operations.
+
+Component-Based Architecture
+Break down your UI into small, reusable components. For example, a ProductCard component can be used on both the main listing page and in a recommendations section. This improves maintainability and code reuse.
+
+Security Considerations
+Ensure your NextAuth.js implementation is secure. Always use a strong NEXTAUTH_SECRET and handle provider client secrets as environment variables. Be mindful of Cross-Site Scripting (XSS) by properly rendering data in React and Cross-Site Request Forgery (CSRF), which NextAuth.js helps mitigate.
+
+FAQ
+Q: Why use SSR instead of Static Site Generation (SSG)?
+
+A: SSR is chosen here because an e-commerce catalog's data (like price or stock) can change frequently. SSR fetches fresh data on every request, ensuring users always see the most up-to-date information. SSG would be more suitable for content that rarely changes, like a blog post or marketing page.
+Q: Do I need to build a separate backend server?
+
+A: No. For this task, all backend logic (cart management, search) should be implemented using Next.js API Routes. This demonstrates the full-stack capabilities of the framework.
+Q: How should I manage the session for API calls from the client?
+
+A: NextAuth.js handles session management for you. You can use the useSession hook on the client to get the user's session status and token. The session cookie is automatically sent with API requests to your Next.js backend, where you can verify it using getServerSession.
+Q: What is the purpose of the data-testid attributes? (Ref: data-testids-coverage)
+
+A: These attributes provide stable selectors for automated testing tools to interact with your application's UI. They decouple tests from implementation details like CSS class names or element structure, making tests less brittle.
+Q: Can I use a different database than PostgreSQL?
+
+A: Yes, you can use any database supported by Prisma (e.g., MySQL, MongoDB). However, you must update your docker-compose.yml and schema.prisma file accordingly and ensure the setup remains fully automated with docker-compose up.
+Q: How does the middleware work for protected routes? (Ref: protected-route-middleware)
+
+A: The middleware.js file intercepts incoming requests before they reach a page. You can define a matcher to specify which paths it applies to (e.g., '/cart'). Inside the middleware, you check for the NextAuth.js session token. If it's missing or invalid, you can redirect the user to a login page.
+Core Requirements
+1.
+The project must be fully containerized using Docker and Docker Compose. A docker-compose.yml file in the root directory must define and orchestrate all necessary services (application, database). The setup must be automated to run with a single docker-compose up command.
+
+File Location: docker-compose.yml (repository root)
+
+Required Services:
+
+app: The Next.js application service, built from a Dockerfile.
+db: A PostgreSQL database service.
+Requirements:
+
+The app service must wait for the db service to be healthy before starting (depends_on).
+The db service must have a healthcheck configured to verify it's ready for connections.
+The db service must automatically run seed scripts on startup. This can be achieved by volume mounting a directory (e.g., ./prisma/seed-data) to /docker-entrypoint-initdb.d.
+Verification:
+
+The docker-compose.yml file is present in the repository root.
+The file defines at least an app and a db service.
+The db service includes a healthcheck.
+The app service uses depends_on with a condition: service_healthy for the db service.
+Running docker-compose up successfully starts all services without manual intervention within 5 minutes.
+2.
+A database schema must be defined using Prisma to model the e-commerce entities. The schema should include tables for users, products, and a shopping cart system.
+
+File Location: prisma/schema.prisma
+
+Required Models:
+
+User: Standard model for NextAuth.js Prisma adapter (includes fields like id, name, email, image, accounts, sessions).
+Product: Represents items for sale.
+Cart: Represents a user's shopping cart.
+CartItem: A join table linking Cart and Product with a quantity.
+Schema for Product, Cart, and CartItem:
+
+Model	Field	Type	Attributes / Notes
+Product	id	String	@id @default(cuid())
+name	String	
+description	String	
+price	Float	
+imageUrl	String	A URL to a product image.
+Cart	id	String	@id @default(cuid())
+userId	String	@unique, foreign key to User.
+user	User	@relation(fields: [userId], references: [id])
+items	CartItem[]	Relation to CartItem.
+CartItem	id	String	@id @default(cuid())
+quantity	Int	@default(1)
+productId	String	Foreign key to Product.
+product	Product	@relation(fields: [productId], references: [id])
+cartId	String	Foreign key to Cart.
+cart	Cart	@relation(fields: [cartId], references: [id])
+Verification:
+
+The prisma/schema.prisma file exists.
+A prisma migrate dev or equivalent command successfully applies the schema to the database.
+A database inspection confirms the existence of the User, Product, Cart, and CartItem tables with the specified relations.
+3.
+An .env.example file must be present in the root of the repository, documenting all environment variables required to run the application.
+
+File Location: .env.example (repository root)
+
+Required Variables:
+
+DATABASE_URL: The connection string for the PostgreSQL database.
+NEXTAUTH_URL: The canonical URL of the application (e.g., http://localhost:3000).
+NEXTAUTH_SECRET: A secret key for signing JWTs and other tokens.
+GITHUB_ID & GITHUB_SECRET (or other chosen OAuth provider credentials).
+Format Example:
+
+# Database
+DATABASE_URL="postgresql://user:password@db:5432/ecommerce?schema=public"
+
+# NextAuth
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=a_very_secret_and_random_string
+
+# Auth Providers
+GITHUB_ID=
+GITHUB_SECRET=
+Verification:
+
+The .env.example file exists in the repository root.
+The file contains placeholders for all the variables listed above.
+No real secrets are committed to the file.
+4.
+A submission.json file must be provided at the repository root containing credentials for a test user account. This is used for automated evaluation of authenticated features. The credentials should correspond to a user created by the database seed script.
+
+File Location: submission.json (repository root)
+
+Required Structure:
+
+{
+  "testUser": {
+    "email": "test.user@example.com",
+    "name": "Test User"
+  }
+}
+Details:
+
+The email and name must match a user record seeded into the database.
+This user will be used to simulate an OAuth login during automated testing.
+Verification:
+
+The submission.json file exists at the repository root.
+The file is valid JSON and matches the specified structure.
+The testUser.email exists in the User table of the seeded database.
+5.
+User authentication must be implemented using NextAuth.js, with at least one OAuth provider configured.
+
+File Location: pages/api/auth/[...nextauth].js
+
+Requirements:
+
+The dynamic API route for NextAuth.js must be correctly set up.
+At least one OAuth provider (e.g., GitHub, Google) must be configured.
+The Prisma adapter (@next-auth/prisma-adapter) must be used to persist user, session, and account data to the database.
+Verification:
+
+A request to /api/auth/providers returns a JSON object containing the configured provider (e.g., {"github":{...}}).
+Navigating to /api/auth/signin displays a page with an option to sign in using the configured provider.
+After a successful simulated OAuth login, new records are created in the User, Account, and Session tables in the database.
+6.
+The home page (/) must use Server-Side Rendering (SSR) to fetch and display a list of products from the database.
+
+File Location: pages/index.js
+
+Requirements:
+
+The page must export an async function named getServerSideProps.
+This function must fetch a list of products from the database using Prisma.
+The fetched products must be passed as props to the page component and rendered.
+Each product card in the list must display the product's name, price, and image.
+Verification:
+
+A GET request to / returns a fully rendered HTML page containing product information.
+The HTML response body includes the names and prices of products from the seeded database.
+Disabling JavaScript in the browser still shows the initial list of products.
+Changes made directly to the Product table in the database are reflected immediately on a page refresh, confirming SSR behavior.
+7.
+Dynamic product detail pages (e.g., /products/[id]) must use SSR to fetch and display information for a single product.
+
+File Location: pages/products/[id].js
+
+Requirements:
+
+The page must use a dynamic route to capture the product ID.
+It must export getServerSideProps to fetch data for a single product based on the ID from the URL context.
+If a product with the given ID is not found, the page should return a 404 status.
+The page must display the product's name, description, price, and image.
+Verification:
+
+A GET request to /products/{validProductId} returns a fully rendered HTML page with the specific product's details.
+The HTML response body contains the correct name, description, and price for that product.
+A GET request to /products/{invalidProductId} returns an HTTP 404 status code.
+8.
+API routes must be created to manage the shopping cart. These routes must be protected, requiring user authentication.
+
+Endpoint: GET /api/cart
+
+Description: Fetches the contents of the current user's cart.
+Response (200 OK): A JSON object representing the cart and its items.
+Endpoint: POST /api/cart
+
+Description: Adds a product to the cart.
+Request Body: { "productId": "string", "quantity": number }
+Response (200 OK): The updated cart contents.
+Endpoint: DELETE /api/cart
+
+Description: Removes a product from the cart.
+Request Body: { "productId": "string" }
+Response (200 OK): The updated cart contents.
+Verification:
+
+Unauthenticated requests to any /api/cart endpoint return a 401 Unauthorized or 403 Forbidden status.
+Authenticated POST request adds an item to the CartItem table linked to the user's cart.
+Authenticated GET request returns the correct cart items for that user.
+Authenticated DELETE request removes the specified item from the CartItem table.
+9.
+The main shopping cart page (/cart) must be a protected route, accessible only to authenticated users.
+
+File Location: middleware.js (repository root)
+
+Requirements:
+
+The middleware must apply to the /cart path.
+It must check for a valid NextAuth.js session.
+If the user is not authenticated, it must redirect them to the sign-in page (e.g., /api/auth/signin).
+Verification:
+
+A GET request to /cart by an unauthenticated user results in a 307 Temporary Redirect to the sign-in page.
+A GET request to /cart by an authenticated user results in a 200 OK status and renders the cart page.
+10.
+The product listing page must support server-side search via a URL query parameter.
+
+File Location: pages/index.js
+
+Requirements:
+
+The getServerSideProps function must read a query parameter, e.g., q.
+The database query must be modified to filter products whose name or description contains the search term (case-insensitive).
+The filtered products are then rendered on the page.
+Verification:
+
+A GET request to /?q=searchTerm returns an HTML page containing only products that match 'searchTerm'.
+Products that do not match the search term are not present in the HTML response.
+An empty or missing q parameter returns all products (or the first page of products).
+11.
+The product listing page must support server-side pagination via a URL query parameter.
+
+File Location: pages/index.js
+
+Requirements:
+
+The getServerSideProps function must read a query parameter, e.g., page.
+The database query must use skip and take (or equivalent) to fetch the correct slice of products for the given page.
+The UI must include 'Next' and 'Previous' links that navigate to /?page={page+1} and /?page={page-1} respectively.
+Verification:
+
+A GET request to /?page=2 returns a different set of products than a request to /?page=1.
+The response for /?page=1 contains the first N products, and /?page=2 contains the next N products, as ordered in the database.
+The 'Next Page' link on page 1 correctly points to /?page=2.
+12.
+All key interactive and display elements throughout the application must have a data-testid attribute for automated testing.
+
+Scope: Application-wide.
+
+Required data-testid Attributes:
+
+Product List Page (/):
+Search Input: search-input
+Search Button: search-button
+Product Card (container for each product): product-card-{productId}
+Add to Cart Button (on card): add-to-cart-button-{productId}
+Pagination Next Button: pagination-next
+Pagination Previous Button: pagination-prev
+Product Detail Page (/products/[id]):
+Product Name Display: product-name
+Product Price Display: product-price
+Product Description Display: product-description
+Add to Cart Button: add-to-cart-button
+Shopping Cart (/cart):
+Cart Item (container for each item): cart-item-{productId}
+Remove Item Button: remove-item-button-{productId}
+Quantity Input: quantity-input-{productId}
+Cart Total Display: cart-total
+Authentication:
+Sign In Button: signin-button
+Sign Out Button: signout-button
+Verification:
+
+Use a DOM inspection tool or an automated E2E test script (e.g., Playwright) to verify the presence of all listed data-testid attributes on their respective pages.
+The {productId} placeholders must be dynamically replaced with the actual product ID.
+13.
+API routes that accept a request body (e.g., adding an item to the cart) must validate the payload using a schema validation library like Zod.
+
+Scope: All POST/PUT/PATCH API routes.
+
+Requirements:
+
+Implement schema-based validation for request bodies.
+If validation fails, the API must respond with a 400 Bad Request status code.
+The response body for a validation error should contain a meaningful error message.
+Example (for POST /api/cart):
+
+A valid body is { "productId": "some-cuid", "quantity": 1 }.
+An invalid body could be { "productId": 123 } (wrong type) or {} (missing fields).
+Verification:
+
+Send a request to POST /api/cart with a correctly formatted body. Verify the response status is 200 OK.
+Send a request with a malformed body (e.g., missing productId). Verify the response status is 400 Bad Request.
+Send a request with an invalid data type (e.g., quantity as a string). Verify the response status is 400 Bad Request.
+
+Submission Instructions
+Submit a Git repository containing all your application code. The repository must include a docker-compose.yml file, a Dockerfile for the Next.js app, and a .env.example file documenting all environment variables. Your application must be runnable with a single docker-compose up command. A submission.json file is required at the root with test credentials, as specified in submission-config. Include a comprehensive README.md file with setup instructions. Do not commit any real secrets or .env files.
+
+Evaluation Overview
+Your submission will be evaluated based on functionality, code quality, and adherence to project requirements. An automated testing suite will be run to verify the core_requirements, including the functionality of the SSR pages, API routes, and authentication system by interacting with the UI via data-testid attributes. Your code will also undergo automated analysis to assess its structure, maintainability, and use of best practices. Finally, your project setup will be checked to ensure it can be run easily using the provided docker-compose.yml file.
